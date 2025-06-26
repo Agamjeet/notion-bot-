@@ -217,7 +217,7 @@ def generate_daily_content(day, headers=None):
         print(f"Error in generate_daily_content: {str(e)}")
         return f"Error generating content for day {day}"
 
-def generate_dataset(pdf_path, output_csv_path="dataset.csv"):
+def generate_dataset(pdf_path, project_title=None, output_csv_path=None):
     """Generate a realistic dataset in CSV format for the project, with at least 100 rows."""
     design_doc = read_pdf(pdf_path)
     model = genai.GenerativeModel('gemini-2.5-flash')
@@ -229,6 +229,17 @@ def generate_dataset(pdf_path, output_csv_path="dataset.csv"):
     )
     response = safe_generate_content(model, prompt)
     csv_content = response.text.strip() if response else ""
+    
+    # Generate unique filename based on project title
+    if output_csv_path is None:
+        if project_title:
+            # Clean the project title for filename use
+            safe_title = "".join(c for c in project_title if c.isalnum() or c in (' ', '-', '_')).rstrip()
+            safe_title = safe_title.replace(' ', '_')
+            output_csv_path = f"{safe_title}_dataset.csv"
+        else:
+            output_csv_path = "dataset.csv"
+    
     # Save to file
     with open(output_csv_path, "w", encoding="utf-8") as f:
         f.write(csv_content)

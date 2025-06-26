@@ -11,6 +11,7 @@ from content_generator import (
     generate_dataset,
 )
 import re
+import glob
 
 # Load environment variables
 load_dotenv()
@@ -172,72 +173,98 @@ def create_page_with_content(parent_id, title, content, image_url=None, pdf_url=
 
 def main():
     try:
-        # Check if PDF exists
-        pdf_path = r'C:\Users\padda\Downloads\prompt engineerin\10 projects\19.DABA_Real Estate price prediction (BB0019DABA003M).pdf'
-        if not os.path.exists(pdf_path):
-            print("❌ Error: design_doc.pdf not found!")
+        # Get folder path from user input
+        folder_path = input("Enter the folder path containing PDFs: ").strip().strip('"\'')
+        
+        # Check if folder exists
+        if not os.path.exists(folder_path):
+            print(f"❌ Error: Folder not found: {folder_path}")
             return
+        
+        # Find all PDF files in the folder
+        pdf_pattern = os.path.join(folder_path, "*.pdf")
+        pdf_files = glob.glob(pdf_pattern)
+        
+        if not pdf_files:
+            print(f"❌ No PDF files found in: {folder_path}")
+            return
+        
+        print(f"🚀 Found {len(pdf_files)} PDF files to process")
+        
+        # Process each PDF file
+        for i, pdf_path in enumerate(pdf_files, 1):
+            print(f"\n--- Processing {i}/{len(pdf_files)}: {os.path.basename(pdf_path)} ---")
+            
+            # Check if PDF exists
+            if not os.path.exists(pdf_path):
+                print(f"❌ Error: PDF not found: {pdf_path}")
+                continue
 
-        # print("🚀 Starting content generation and Notion update...")
+            # print("🚀 Starting content generation and Notion update...")
+            
+            # Extract project title first (needed for dataset filename)
+            project_title = extract_title_from_pdf(pdf_path)
+            print(f"📝 Project: {project_title}")
+            
+            ## Step 0: Check if dataset is required and get headers if needed
+            dataset_headers = None
+            if check_dataset_required(pdf_path):
+                print("Yes, dataset is required.")
+                csv_path = generate_dataset(pdf_path, project_title=project_title)
+                with open(csv_path, 'r', encoding='utf-8') as f:
+                    dataset_headers = f.readline().strip()
+                print("Dataset headers:", dataset_headers)
+            else:
+                print("No, dataset is required.")
+            
+            # Create main project page
+            print(f"📝 Creating main project page: {project_title}")
+            main_page = create_page_with_content(parent_page_id, project_title, f"Project: {project_title}")
+            
+            # Generate and update background
+            print("📄 Generating Background Information...")
+            background_content = generate_background(pdf_path)
+            create_page_with_content(main_page, "Background Information", background_content)
+            print("✅ Background Information updated")
+            
+            # Generate and update engineering design
+            print("📄 Generating Engineering Design...")
+            eng_result = generate_engineering(pdf_path)
+            if "error" in eng_result:
+                print(f"❌ Error in engineering design: {eng_result['error']}")
+                create_page_with_content(main_page, "Engineering Design", "Error generating engineering content")
+            else:
+                eng_text = eng_result["schema"] + "\n\n" + eng_result["component_explanations"]
+                create_page_with_content(
+                    main_page, 
+                    "Engineering Design", 
+                    eng_text
+                )
+            print("✅ Engineering Design updated")
+            
+            # Generate and update work overview
+            print("📄 Generating Work Overview...")
+            work_content = generate_work_overview(pdf_path)
+            create_page_with_content(main_page, "Work Overview", work_content)
+            print("✅ Work Overview updated")
+            
+            #Generate and update project plan
+            print("📄 Generating Project Plan...")
+            plan_content = generate_project_plan()
+            plan_page = create_page_with_content(main_page, "Project Plan", plan_content)
+            print("✅ Project Plan updated")
+            
+            #Generate and update all daily content
+            print("📅 Generating daily content...")
+            for day in range(1, 41):
+                print(f"  Generating Day {day}...", end='\r')
+                content = generate_daily_content(day, headers=dataset_headers)
+                create_page_with_content(plan_page, f"Day {day}", content)
+            print("\n✅ All daily content updated")
+            
+            print(f"✅ Successfully processed: {project_title}")
         
-        # # Step 0: Check if dataset is required and get headers if needed
-        # dataset_headers = None
-        # if check_dataset_required(pdf_path):
-        #     print("Yes, dataset is required.")
-        #     csv_path = generate_dataset(pdf_path)
-        #     with open(csv_path, 'r', encoding='utf-8') as f:
-        #         dataset_headers = f.readline().strip()
-        #     print("Dataset headers:", dataset_headers)
-        # else:
-        #     print("No, dataset is required.")
-        
-        # Create main project page
-        project_title = extract_title_from_pdf(pdf_path)
-        print(f"📝 Creating main project page: {project_title}")
-        main_page = create_page_with_content(parent_page_id, project_title, f"Project: {project_title}")
-        
-        # # Generate and update background
-        # print("📄 Generating Background Information...")
-        # background_content = generate_background(pdf_path)
-        # create_page_with_content(main_page, "Background Information", background_content)
-        # print("✅ Background Information updated")
-        
-        # # Generate and update engineering design
-        # print("📄 Generating Engineering Design...")
-        # eng_result = generate_engineering(pdf_path)
-        # if "error" in eng_result:
-        #     print(f"❌ Error in engineering design: {eng_result['error']}")
-        #     create_page_with_content(main_page, "Engineering Design", "Error generating engineering content")
-        # else:
-        #     eng_text = eng_result["schema"] + "\n\n" + eng_result["component_explanations"]
-        #     create_page_with_content(
-        #         main_page, 
-        #         "Engineering Design", 
-        #         eng_text
-        #     )
-        # print("✅ Engineering Design updated")
-        
-        # Generate and update work overview
-        print("📄 Generating Work Overview...")
-        work_content = generate_work_overview(pdf_path)
-        create_page_with_content(main_page, "Work Overview", work_content)
-        print("✅ Work Overview updated")
-        
-        # Generate and update project plan
-        # print("📄 Generating Project Plan...")
-        # plan_content = generate_project_plan()
-        # plan_page = create_page_with_content(main_page, "Project Plan", plan_content)
-        # print("✅ Project Plan updated")
-        
-        # Generate and update all daily content
-        # print("📅 Generating daily content...")
-        # for day in range(1, 41):
-        #     print(f"  Generating Day {day}...", end='\r')
-        #     content = generate_daily_content(day, headers=dataset_headers)
-        #     create_page_with_content(plan_page, f"Day {day}", content)
-        # print("\n✅ All daily content updated")
-        
-        # print("🎉 All content has been generated and updated to Notion!")
+        print("🎉 All content has been generated and updated to Notion!")
         
     except Exception as e:
         print(f"❌ An error occurred: {str(e)}")
